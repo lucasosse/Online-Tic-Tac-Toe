@@ -59,18 +59,6 @@ int socket_connect(const char *host_address)
         {
             perror("ERROR ON ASSIGN STRUCT: ");
         }
-        else
-        {
-            // bytes_sended = sendto(sock, buffer, sizeof buffer, 0, (struct sockaddr *) &client_addr, sizeof client_addr );
-            // if(bytes_sended > 0)
-            // {
-                // printf("SENDED\n");
-            // }
-            // else
-            // {
-                // perror("ERROR ON SEND: ");
-            // }
-        }
     }
     else
     {
