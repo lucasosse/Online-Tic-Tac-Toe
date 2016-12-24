@@ -2,24 +2,24 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <netinet/in.h>
+#include <sys/types.h>
 #include "inc/rede.h"
 
 const unsigned short port = 8888;
 char buffer[256];
 
 #ifdef _WIN32
-    #include <winsock2.h>
+    #include <WinSock2.h>
+    #include <WS2tcpip.h>
     #pragma comment(lib,"ws2_32.lib")
 
 #endif
 
 #ifdef __linux__
     #include <sys/socket.h>
-    #include <sys/types.h>
     #include <netdb.h>
     #include <arpa/inet.h>
-
+    #include <netinet/in.h>
 #endif
 
 int socket_host_game(const char *host_address)
@@ -35,7 +35,12 @@ int socket_host_game(const char *host_address)
     {
         server_addr.sin_family = AF_INET;
         server_addr.sin_port = htons(port);
-        inet_pton(AF_INET, host_address, &(server_addr.sin_addr));
+        #ifdef _WIN32
+          server_addr.sin_addr.s_addr = inet_addr(host_address);
+        #endif
+        #ifdef __linux__
+          inet_pton(AF_INET, host_address, &(server_addr.sin_addr));
+        #endif
         if(bind(sock, (struct sockaddr *) &server_addr, sizeof(server_addr)) == -1)
         {
             perror("BIND ERROR: ");
@@ -55,10 +60,12 @@ int socket_connect(const char *host_address)
     {
         client_addr.sin_family = AF_INET;
         client_addr.sin_port = htons(port);
-        if(inet_pton(AF_INET, host_address, &(client_addr.sin_addr)) == -1)
-        {
-            perror("ERROR ON ASSIGN STRUCT: ");
-        }
+        #ifdef _WIN32
+          client_addr.sin_addr.s_addr = inet_addr(host_address);
+        #endif
+        #ifdef __linux__
+          inet_pton(AF_INET, host_address, &(server_addr.sin_addr));
+        #endif
     }
     else
     {
@@ -104,8 +111,14 @@ int socket_receive(int *socket_fd, const char *from_address)
     printf("RECEIVING DATA...\n");
     remote_addr.sin_family = AF_INET;
     remote_addr.sin_port = htons(port);
-    if(inet_pton(AF_INET, from_address, &(remote_addr.sin_addr)) != -1)
-    {
+    // if(inet_pton(AF_INET, from_address, &(remote_addr.sin_addr)) != -1)
+    // {
+    #ifdef _WIN32
+      remote_addr.sin_addr.s_addr = inet_addr(from_address);
+    #endif
+    #ifdef __linux__
+      inet_pton(AF_INET, host_address, &(server_addr.sin_addr));
+    #endif
         bytes_received = recvfrom((*socket_fd), buffer, sizeof buffer, 0, (struct sockaddr *) &remote_addr, &fromlen);
         if(bytes_received > 0)
         {
@@ -115,11 +128,11 @@ int socket_receive(int *socket_fd, const char *from_address)
         {
             perror("COULDN'T RECEIVE: ");
         }
-    }
-    else
-    {
+    // }
+    // else
+    // {
         perror("ERROR ON ASSINGN FROM RECEIVE: ");
-    }
+    // }
 }
 
 void socket_destroy(int *socket_fd)
