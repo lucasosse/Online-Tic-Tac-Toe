@@ -113,34 +113,34 @@ char buffer[256];
     int socket_send(int *socket_fd, const char *to_address, unsigned short x, unsigned short y)
 #endif
 {
-    ssize_t bytes_sended = 0;
     struct addrinfo hint, *socketinfo = NULL;
     memset(&hint, 0, sizeof(struct addrinfo));
     hint.ai_family = AF_INET;
     if(getaddrinfo(to_address, port, &hint, &socketinfo) != -1)
     {
-        sprintf(buffer, "%dx%d", x, y);
-        bytes_sended = sendto((*socket_fd), buffer, sizeof buffer, 0, socketinfo->ai_addr, socketinfo->ai_addrlen);
-        if(bytes_sended != -1)
+        sprintf(buffer, "/PUT:%dx%d", x, y);
+        if(sendto((*socket_fd), buffer, sizeof buffer, 0, socketinfo->ai_addr, socketinfo->ai_addrlen) > -1)
         {
-            printf("SENDED!\n");
+            return 0;
         }
         else
         {
             perror("ERROR ON SEND: ");
+            return -1;
         }
     }
     else
     {
         perror("ERROR ON ASSINGN FROM SEND: ");
+        return -1;
     }
     freeaddrinfo(socketinfo);
 }
 
 #ifdef _WIN32
-    int socket_receive(SOCKET *socket_fd, const char *from_address)
+    int socket_receive(SOCKET *socket_fd, const char *from_address, char *recv_buffer)
 #else
-    int socket_receive(int *socket_fd, const char *from_address)
+    int socket_receive(int *socket_fd, const char *from_address, char *recv_buffer)
 #endif
 {
     struct addrinfo hints, *remote_addr = NULL;
@@ -150,11 +150,19 @@ char buffer[256];
     {
         if(recvfrom((*socket_fd), buffer, sizeof(buffer), 0, remote_addr->ai_addr, &(remote_addr->ai_addrlen)) > -1)
         {
-            printf("BUFFER RECEIVED: %s\n", buffer);
+            if(strcpy(recv_buffer, buffer) != NULL)
+            {
+                return 0;
+            }
+            else
+            {
+                return -1;
+            }
         }
         else
         {
             perror("COULDN'T RECEIVE: ");
+            return -1;
         }
     }
     else
