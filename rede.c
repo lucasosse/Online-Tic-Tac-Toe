@@ -1,18 +1,20 @@
-#include <stdio.h>
+#ifdef _WIN32
+    #define _WIN32_WINNT 0x0501
+#endif
+
 #include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
 #include <unistd.h>
 #include <sys/types.h>
 #include "inc/rede.h"
 
-const unsigned short port = 8888;
+const char *port = "8888";
 char buffer[256];
 
 #ifdef _WIN32
-    #include <WinSock2.h>
-    #include <WS2tcpip.h>
-    #pragma comment(lib,"ws2_32.lib")
-
+    WSADATA wsaData;
+    int result = -1;
 #endif
 
 #ifdef __linux__
@@ -20,71 +22,102 @@ char buffer[256];
     #include <netdb.h>
     #include <arpa/inet.h>
     #include <netinet/in.h>
+
+    #define INVALID_SOCKET -1
 #endif
 
-int socket_host_game(const char *host_address)
+#ifdef _WIN32
+    SOCKET socket_host_game(const char *host_address)
+#else
+    int socket_host_game(const char *host_address)
+#endif
 {
-    int sock = -1;
-    struct sockaddr_in server_addr;
-    sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-    if(sock == -1)
+    #ifdef _WIN32
+        SOCKET sock = INVALID_SOCKET;
+        if(WSAStartup(MAKEWORD(2,2), &wsaData) != 0)
+        {
+            printf("FAILED TO INITIATE WSADATA\n");
+            WSACleanup();
+            return -1;
+        }
+    #else
+        int sock = -1;
+    #endif
+    struct addrinfo hints, *s_address = NULL;
+    memset(&hints, 0, sizeof(struct addrinfo));
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_DGRAM;
+    hints.ai_protocol = IPPROTO_UDP;
+    if(getaddrinfo(host_address, port, &hints, &s_address) == 0)
     {
-        perror("THE SOCKET COULDN'T BE CREATED: ");
+        sock = socket(s_address->ai_family, s_address->ai_socktype, s_address->ai_protocol);
+        if(sock != INVALID_SOCKET)
+        {
+            if(bind(sock, s_address->ai_addr, s_address->ai_addrlen) == -1)
+            {
+                perror("BIND ERROR: ");
+            }
+        }
+        else
+        {
+            perror("THE SOCKET COULDN'T BE CREATED: ");
+        }
     }
     else
     {
-        server_addr.sin_family = AF_INET;
-        server_addr.sin_port = htons(port);
-        #ifdef _WIN32
-          server_addr.sin_addr.s_addr = inet_addr(host_address);
-        #endif
-        #ifdef __linux__
-          inet_pton(AF_INET, host_address, &(server_addr.sin_addr));
-        #endif
-        if(bind(sock, (struct sockaddr *) &server_addr, sizeof(server_addr)) == -1)
+        printf("ERROR ON RETRIEVE INFORMATION FROM ADDRESS\n");
+    }
+
+    freeaddrinfo(s_address);
+    return sock;
+}
+
+#ifdef _WIN32
+    SOCKET socket_connect_game(const char *host_address)
+#else
+    int socket_connect_game(const char *host_address)
+#endif
+{
+    #ifdef _WIN32
+        SOCKET sock = INVALID_SOCKET;
+        if(WSAStartup(MAKEWORD(2,2), &wsaData) != 0)
         {
-            perror("BIND ERROR: ");
+            printf("FAILED TO INITIATE WSADATA\n");
+            WSACleanup();
+            return -1;
+        }
+    #else
+        int sock = -1;
+    #endif
+    struct addrinfo hints, *c_address = NULL;
+    memset(&hints, 0, sizeof(struct addrinfo));
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_DGRAM;
+    hints.ai_protocol = IPPROTO_UDP;
+    if(getaddrinfo(host_address, port, &hints, &c_address) == 0)
+    {
+        sock = socket(c_address->ai_family, c_address->ai_socktype, c_address->ai_protocol);
+        if(sock == INVALID_SOCKET)
+        {
+            perror("ERROR ON CLIENT DESCRIPTOR: ");
         }
     }
 
+    freeaddrinfo(c_address);
     return sock;
 }
 
-int socket_connect(const char *host_address)
+#ifdef _WIN32
+    int socket_send(SOCKET *socket_fd, const char *to_address, unsigned short x, unsigned short y)
+#else
+    int socket_send(int *socket_fd, const char *to_address, unsigned short x, unsigned short y)
+#endif
 {
     ssize_t bytes_sended = 0;
-    int sock = -1;
-    struct sockaddr_in client_addr;
-    sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-    if(sock != -1)
-    {
-        client_addr.sin_family = AF_INET;
-        client_addr.sin_port = htons(port);
-        #ifdef _WIN32
-          client_addr.sin_addr.s_addr = inet_addr(host_address);
-        #endif
-        #ifdef __linux__
-          inet_pton(AF_INET, host_address, &(server_addr.sin_addr));
-        #endif
-    }
-    else
-    {
-        perror("SOCKET COULDN'T CONNECTO TO HOST: ");
-    }
-
-    return sock;
-}
-
-int socket_send(int *socket_fd, const char *to_address, unsigned short x, unsigned short y)
-{
-    ssize_t bytes_sended = 0;
-    int rv = 0;
-    struct addrinfo hint, *socketinfo;
+    struct addrinfo hint, *socketinfo = NULL;
+    memset(&hint, 0, sizeof(struct addrinfo));
     hint.ai_family = AF_INET;
-    hint.ai_socktype = SOCK_DGRAM;
-    hint.ai_protocol = IPPROTO_UDP;
-    rv = getaddrinfo(to_address, "8888", &hint, &socketinfo);
-    if(rv != -1)
+    if(getaddrinfo(to_address, port, &hint, &socketinfo) != -1)
     {
         sprintf(buffer, "%dx%d", x, y);
         bytes_sended = sendto((*socket_fd), buffer, sizeof buffer, 0, socketinfo->ai_addr, socketinfo->ai_addrlen);
@@ -101,26 +134,21 @@ int socket_send(int *socket_fd, const char *to_address, unsigned short x, unsign
     {
         perror("ERROR ON ASSINGN FROM SEND: ");
     }
+    freeaddrinfo(socketinfo);
 }
 
-int socket_receive(int *socket_fd, const char *from_address)
+#ifdef _WIN32
+    int socket_receive(SOCKET *socket_fd, const char *from_address)
+#else
+    int socket_receive(int *socket_fd, const char *from_address)
+#endif
 {
-    socklen_t fromlen;
-    ssize_t bytes_received = 0;
-    struct sockaddr_in remote_addr;
-    printf("RECEIVING DATA...\n");
-    remote_addr.sin_family = AF_INET;
-    remote_addr.sin_port = htons(port);
-    // if(inet_pton(AF_INET, from_address, &(remote_addr.sin_addr)) != -1)
-    // {
-    #ifdef _WIN32
-      remote_addr.sin_addr.s_addr = inet_addr(from_address);
-    #endif
-    #ifdef __linux__
-      inet_pton(AF_INET, host_address, &(server_addr.sin_addr));
-    #endif
-        bytes_received = recvfrom((*socket_fd), buffer, sizeof buffer, 0, (struct sockaddr *) &remote_addr, &fromlen);
-        if(bytes_received > 0)
+    struct addrinfo hints, *remote_addr = NULL;
+    memset(&hints, 0, sizeof(struct addrinfo));
+    hints.ai_family = AF_INET;
+    if(getaddrinfo(from_address, port, &hints, &remote_addr) == 0)
+    {
+        if(recvfrom((*socket_fd), buffer, sizeof(buffer), 0, remote_addr->ai_addr, &(remote_addr->ai_addrlen)) > -1)
         {
             printf("BUFFER RECEIVED: %s\n", buffer);
         }
@@ -128,17 +156,25 @@ int socket_receive(int *socket_fd, const char *from_address)
         {
             perror("COULDN'T RECEIVE: ");
         }
-    // }
-    // else
-    // {
-        perror("ERROR ON ASSINGN FROM RECEIVE: ");
-    // }
+    }
+    else
+    {
+        printf("ERROR ON ASSINGN FROM RECEIVE\n");
+    }
+    freeaddrinfo(remote_addr);
 }
 
-void socket_destroy(int *socket_fd)
+#ifdef _WIN32
+    void socket_destroy(SOCKET *socket_fd)
+#else
+    void socket_destroy(int *socket_fd)
+#endif
 {
     if(socket_fd != NULL)
     {
+        #ifdef _WIN32
+            WSACleanup();
+        #endif
         close((*socket_fd));
     }
 }
