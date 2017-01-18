@@ -118,7 +118,7 @@ char buffer[256];
     hint.ai_family = AF_INET;
     if(getaddrinfo(to_address, port, &hint, &socketinfo) != -1)
     {
-        sprintf(buffer, "/PUT:%dx%d", x, y);
+        sprintf(buffer, "FRANCIELLE\n /PUT:%dx%d", x, y);
         if(sendto((*socket_fd), buffer, sizeof buffer, 0, socketinfo->ai_addr, socketinfo->ai_addrlen) > -1)
         {
             return 0;
@@ -182,7 +182,9 @@ char buffer[256];
     {
         #ifdef _WIN32
             WSACleanup();
+            closesocket(*socket_fd);
+        #else
+            close((*socket_fd));
         #endif
-        close((*socket_fd));
     }
 }
